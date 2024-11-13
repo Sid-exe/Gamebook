@@ -2,7 +2,6 @@ const state = { messages: [] };
 const loader = document.querySelector(".loader");
 
 function parseMessageContent(inputString) {
-  //const regex = /(\w+):\s(.+?)(?=\n\w+:|\n?$)/gs;
   const regex = /(\w+):\s(.+?)($|\n)/g;
   const matches = inputString.matchAll(regex);
   const parsed = {};
@@ -21,6 +20,7 @@ function assistantMessageToHTML(message) {
   div.classList.add("message");
   div.classList.add(message.role);
 
+  // Display image if available
   if ("cyoa_image_base64" in message) {
     const image = document.createElement("img");
     image.setAttribute(
@@ -31,6 +31,7 @@ function assistantMessageToHTML(message) {
     div.appendChild(image);
   }
 
+  // Display story content
   const messageContent = document.createElement("figcaption");
   messageContent.classList.add("message-content");
   messageContent.innerHTML = parsedMessage["Story"] || ""; // Gracefully avoid GPT syntax errors
@@ -45,35 +46,44 @@ function userMessageToHTML(message) {
   return div;
 }
 
-function choicesToHTML(choice1, choice2) {
+function choicesToHTML(choice1, choice2, isEndGame = false) {
   const form = document.createElement("form");
 
-  if (choice1) {
-    const button1 = document.createElement("button");
-    button1.classList.add("btn");
-    button1.setAttribute("id", "choice1");
-    button1.addEventListener("click", function (e) {
-      handleSubmit(e, 1);
+  if (isEndGame) {
+    const playAgainButton = document.createElement("button");
+    playAgainButton.classList.add("btn");
+    playAgainButton.setAttribute("id", "playAgain");
+    playAgainButton.addEventListener("click", function (e) {
+      handlePlayAgain(e);
     });
-    button1.setAttribute("data-choice", choice1);
-    button1.setAttribute("value", "choice1");
-    button1.innerHTML = choice1;
+    playAgainButton.innerHTML = "Play Again";
+    form.appendChild(playAgainButton);
+  } else {
+    if (choice1) {
+      const button1 = document.createElement("button");
+      button1.classList.add("btn");
+      button1.setAttribute("id", "choice1");
+      button1.addEventListener("click", function (e) {
+        handleSubmit(e, 1);
+      });
+      button1.setAttribute("data-choice", choice1);
+      button1.setAttribute("value", "choice1");
+      button1.innerHTML = choice1;
+      form.appendChild(button1);
+    }
 
-    form.appendChild(button1);
-  }
-
-  if (choice2) {
-    const button2 = document.createElement("button");
-    button2.classList.add("btn");
-    button2.setAttribute("id", "choice2");
-    button2.addEventListener("click", function (e) {
-      handleSubmit(e, 2);
-    });
-    button2.setAttribute("data-choice", choice2);
-    button2.setAttribute("value", "choice2");
-    button2.innerHTML = choice2;
-
-    form.appendChild(button2);
+    if (choice2) {
+      const button2 = document.createElement("button");
+      button2.classList.add("btn");
+      button2.setAttribute("id", "choice2");
+      button2.addEventListener("click", function (e) {
+        handleSubmit(e, 2);
+      });
+      button2.setAttribute("data-choice", choice2);
+      button2.setAttribute("value", "choice2");
+      button2.innerHTML = choice2;
+      form.appendChild(button2);
+    }
   }
 
   return form;
@@ -84,6 +94,7 @@ function drawBodyHTML() {
   const storyContainer = document.querySelector(".container");
   storyContainer.innerHTML = "";
 
+  // Draw messages from assistant
   for (const message of messages) {
     if (message.role === "assistant") {
       storyContainer.appendChild(assistantMessageToHTML(message));
@@ -93,7 +104,7 @@ function drawBodyHTML() {
     }
   }
 
-  if (messages.length == 0) {
+  if (messages.length === 0) {
     const child = choicesToHTML(
       "A wizard enters a magical dark forest.",
       "An explorer enters an interdimensional time machine."
@@ -101,15 +112,18 @@ function drawBodyHTML() {
     storyContainer.appendChild(child);
     child.scrollIntoView();
   } else {
-    const parsedMessage = parseMessageContent(
-      messages[messages.length - 1]["content"]
-    );
-    const child = choicesToHTML(
-      parsedMessage["Choice1"],
-      parsedMessage["Choice2"]
-    );
-    storyContainer.appendChild(child);
-    child.scrollIntoView();
+    const parsedMessage = parseMessageContent(messages[messages.length - 1]["content"]);
+
+    // Check if the game is over or not
+    if (parsedMessage["GameOver"] === "true") {
+      const child = choicesToHTML(null, null, true); // End game screen
+      storyContainer.appendChild(child);
+      child.scrollIntoView();
+    } else {
+      const child = choicesToHTML(parsedMessage["Choice1"], parsedMessage["Choice2"]);
+      storyContainer.appendChild(child);
+      child.scrollIntoView();
+    }
   }
 }
 
@@ -133,6 +147,28 @@ function handleSubmit(event, choice) {
           content: choiceString,
         },
       ],
+    }),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      state.messages = data.messages;
+      drawBodyHTML();
+      loader.classList.toggle("hidden");
+    });
+}
+
+function handlePlayAgain(event) {
+  event.preventDefault();
+  state.messages = []; // Reset the story
+  loader.classList.toggle("hidden");
+
+  fetch("/cyoa", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messages: [],
     }),
   })
     .then((response) => response.json())

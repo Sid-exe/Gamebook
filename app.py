@@ -37,16 +37,20 @@ app = Flask(
 
 
 system_directive = """
-You, 'assistant', are telling me, 'user', an interactive choose-your-own-adventure story. Your repsonses are with labels so I can parse them and display them in a user interface.
+You, 'assistant', are telling me, 'user', an interactive choose-your-own-adventure story. Your responses are labeled so I can parse them and display them in a user interface.
 Each step of the story, you present the following information.
 Story. The current state of the story.
 Caption. A detailed caption showing the current state of the story to be used as a DALL-E image prompt. It should be as consistent as possible with the previous caption.
 Choice1. The text of the first choice.
 Choice2. The text of the second choice.
+
+Please aim to conclude the story in a satisfying and meaningful way after a few choice selections, typically within 4-5 steps. Guide the narrative toward a resolution, where the main character either accomplishes their goal or encounters a decisive outcome.
+
 Your image captions should be concise but repeat specific details about the setting, characters, and objects in the story to help generate consistent images across repeated invocations.
 Present exactly two choices to the user. Never offer blank (empty) choices.
 Only present choices that build on the story. Do not present choices that lead the main character away from action or conflict (such as "going home").
 Do not repeat yourself.
+
 An example exchange is as follows:
 
 user:
@@ -55,11 +59,11 @@ A wizard enters a dungeon.
 assistant:
 Story: An aged wizard quietly enters a dark dungeon. He can tell by the echo of his footsteps that the chamber is large and seemingly empty.
 Caption: A grey-bearded wizard with a flowing blue cloak, a blue hat, a long grey beard, and a 6-foot wooden staff entering a dark dungeon with high-ceilings from the left side of the frame.
-Choice1: The wizard illuminates the dungeon
-Choice2: The wizard turns himself invisble
+Choice1: The wizard illuminates the dungeon.
+Choice2: The wizard turns himself invisible.
 
 user:
-The wizard illuminates the dungeon
+The wizard illuminates the dungeon.
 
 assistant:
 Story: The wizard illuminates the tip of his staff and lights the room. In the light, he sees a giant ogre! The ogre leaps at him.
@@ -73,9 +77,48 @@ The wizard casts a spell, freezing the ogre in place.
 assistant:
 Story: The wizard casts "petrificus schmetrificus", freezing the ogre in mid-air.
 Caption: In a high-ceilinged dark dungeon, a wizard with a flowing blue cloak, a blue hat, a long grey beard, and a 6-foot wooden staff stands to the left. He has petrified an 8-foot hulking ogre that wears a tattered brown tunic and holds an axe that was lunging towards him from the right side of the frame.
-Choice1: The wizard looks through the ogres pockets.
+Choice1: The wizard looks through the ogre's pockets.
 Choice2: The wizard, fearing his spell will wear off, hurries away.
+
+user:
+The wizard looks through the ogre's pockets.
+
+assistant:
+Story: The wizard finds a glowing key and a mysterious map in the ogre's pockets. The map seems to lead to a hidden treasure room in the dungeon.
+Caption: In a high-ceilinged dark dungeon, a grey-bearded wizard with a flowing blue cloak and 6-foot wooden staff stands by a frozen 8-foot ogre. He holds a glowing key and a map that shows the path to hidden treasure in the dungeon.
+Choice1: The wizard follows the map to the treasure room.
+Choice2: The wizard decides to leave the dungeon with the key and the map.
+
+user:
+The wizard follows the map to the treasure room.
+
+assistant:
+Story: Following the map, the wizard enters a hidden chamber filled with gold and a powerful relic. The relic hums with magical energy, and the air is thick with tension.
+Caption: A grey-bearded wizard with a flowing blue cloak and 6-foot wooden staff stands in a secret treasure room filled with gold and jewels. In front of him, a glowing relic pulses with magical energy on a pedestal.
+Choice1: The wizard takes the relic, knowing it will grant him immense power.
+Choice2: The wizard leaves the relic, taking only the treasure and avoiding the danger.
+
+user:
+The wizard takes the relic, knowing it will grant him immense power.
+
+assistant:
+Story: As the wizard grasps the relic, a surge of magical energy fills the room, but the dungeon begins to crumble around him! The relic seems to have triggered a collapse.
+Caption: The grey-bearded wizard, with a flowing blue cloak and 6-foot wooden staff, holds a glowing relic in his hand as the treasure room begins to collapse. Dust and debris swirl around him.
+Choice1: The wizard uses the relic to escape the collapsing dungeon.
+Choice2: The wizard tries to outrun the collapse and reach the exit.
+
+user:
+The wizard uses the relic to escape the collapsing dungeon.
+
+assistant:
+Story: The wizard channels the relic's power, opening a magical portal that transports him outside the dungeon just as it collapses behind him.
+Caption: A grey-bearded wizard with a flowing blue cloak and 6-foot wooden staff stands triumphantly in front of a glowing portal, just as a dark and crumbling dungeon fades into the background.
+Choice1: The wizard returns to the village, hailed as a hero.
+Choice2: The wizard embarks on a new quest with the relic's newfound power.
+
+The End
 """.strip()
+
 
 
 def get_caption_from_chat_response(chat_response_object: Mapping) -> str:
@@ -196,6 +239,13 @@ def generate_image_base64_stability(image_caption, dimensions=(512, 512)):
         data = response.json()
         return data["artifacts"][0]["base64"]
 
+def check_for_end_of_game(chat_response_object) -> bool:
+    """
+    Check if the assistant has returned "The End".
+    """
+    content = chat_response_object["content"].strip()
+    return content == "The End"
+
 
 # POST endpoint
 @app.route("/cyoa", methods=["POST"])
@@ -212,9 +262,21 @@ def cyoa():
 
     chat_response_object = generate_cyoa_next_message(messages)
 
-    messages.append(chat_response_object)
+    # Check if the story has ended
+    if check_for_end_of_game(chat_response_object):
+        # Add the choice for the user to either "End Game" or "Play Again"
+        messages.append({
+            "role": "assistant",
+            "content": "The End. Would you like to end the game or play again?",
+            "Choice1": "End Game",
+            "Choice2": "Play Again"
+        })
+    else:
+        messages.append(chat_response_object)
 
     t_image = time.time()
+
+
 
     try:
         image_caption = get_caption_from_chat_response(chat_response_object)
@@ -224,10 +286,8 @@ def cyoa():
 
     # Continue on to generate an image and affix it to the last message
 
-    # image_base64 = generate_image_base64_dalle(image_caption)
-    image_base64 = generate_image_base64_stability(
-        "A first person view in the style of detailed fantasy art: " + image_caption
-    )
+    image_base64 = generate_image_base64_dalle( "A first person view in the style of detailed fantasy art: " + image_caption)
+    #image_base64 = generate_image_base64_stability( "A first person view in the style of detailed fantasy art: " + image_caption)
 
     if image_base64:
         # ...
@@ -237,6 +297,21 @@ def cyoa():
         log.info(f"Image generated and saved in {time.time() - t_image} seconds")
 
     return {"messages": messages}
+
+@app.route("/handle_choice", methods=["POST"])
+def handle_choice():
+    request_json = request.get_json()
+    
+    user_choice = request_json.get('user_choice')
+    
+    if user_choice == "End Game":
+        # Close the game (This can be done by stopping the Flask app or redirecting to a "Game Over" page)
+        return {"message": "Game over. Thank you for playing!"}, 200
+    elif user_choice == "Play Again":
+        # Restart the game by resetting the story context and starting from a new story
+        return {"message": "Starting a new story..."}, 200
+    else:
+        return {"message": "Invalid choice!"}, 400
 
 
 # GET endpoint

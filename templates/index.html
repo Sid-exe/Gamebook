@@ -3,17 +3,43 @@
 
 <head>
     <title>Choose Your Own Adventure</title>
-    <link rel="stylesheet" href="./app.css">
+    <link rel="stylesheet" href="./app.css?v=1">
 </head>
 
 <body>
-    <div class="container"></div>
+    <div class="container">
+        <!-- Game heading and welcome message -->
+        <h1>Gamebook</h1>
+        <p class="welcome-message">Welcome to the adventure of a lifetime! Get ready to make choices that will shape your journey. Choose an option below to begin.</p>
+
+        <!-- This is where the story text will be displayed -->
+        <div id="story"></div>
+
+        <!-- This is where the image will be displayed -->
+        <div id="story-image">
+            <img id="story-image-img" src="" alt="Story Image" class="hidden">
+        </div>
+
+        <!-- Choices displayed to the user -->
+        <div id="choices">
+            <button id="choice1" class="choice-btn"></button>
+            <button id="choice2" class="choice-btn"></button>
+        </div>
+
+        <!-- End Game or Play Again Options -->
+        <div id="end-game-options" class="hidden">
+            <button id="play-again" class="choice-btn">Play Again</button>
+            <button id="end-game" class="choice-btn">End Game</button>
+        </div>
+    </div>
+
     <div class="loader hidden">
         <div></div>
         <div></div>
         <div></div>
         <div></div>
     </div>
+
     <script src="./app.js"></script>
 
 </body>
